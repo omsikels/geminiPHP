@@ -1,9 +1,10 @@
-<header>
-	<div class="overlay">
-		<h1>Simply The Best</h1>
-		<h3>Reasons for Choosing Us</h3>
-		<p>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Vero nostrum quis, odio veniam itaque ullam debitis qui magnam consequatur ab. Vero nostrum quis, odio veniam itaque ullam debitis qui magnam consequatur ab.</p>
-		<br>
-		<button>READ MORE</button>
-	</div>
+<header class="header">
+    <div class="container">
+        <nav class="navigation">
+            <ul class="nav-links">
+            </ul>
+        </nav>
+        <!-- ✅ Home Button -->
+        <a href="landing.php" class="home-button">Home</a>
+    </div>
 </header>

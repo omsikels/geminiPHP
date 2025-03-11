@@ -1,5 +1,5 @@
 <?php
-require 'db.php';  // ✅ Connect to your MySQL database
+require 'db.php';  // ✅ Connect to MySQL database
 require 'vendor/autoload.php';
 
 use Dotenv\Dotenv;
@@ -23,29 +23,26 @@ function save_uploaded_file($file) {
     return $filePath;
 }
 
-function extract_cheque_details($imagePath) {
+function extract_bank_check_details($imagePath) {
     global $apiKey;
 
     $imageData = base64_encode(file_get_contents($imagePath));
-    $prompt = "Extract cheque details from this cheque image with high accuracy. 
-    Return the response as a structured JSON object with the following exact fields:
+    $prompt = "Extract bank check details from this image with high accuracy. 
+    Return as a structured JSON object with the following exact fields:
 
     {
-        'accountName': 'Full name of the account holder',
-        'date': 'Cheque issuance date in YYYY-MM-DD format',
-        'chequeNumber': 'Unique cheque number',
-        'accountNumber': 'Complete bank account number',
-        'bankName': 'Full name of the bank',
-        'amountInNumbers': 'Exact numeric value of the cheque amount (e.g., 5312.14)',
-        'brstn': 'Bank Routing Symbol Transit Number (BRSTN)'
+        'bank_name': 'Full name of the bank',
+        'date': 'Transaction date in YYYY-MM-DD format',
+        'particulars': 'Transaction description (if available)',
+        'amount': 'Exact numeric value of the transaction amount (e.g., 5312.14)',
+        'reference_number': 'Unique check reference number'
     }
 
     Ensure:
-    1 The date format is strictly YYYY-MM-DD (e.g., 2025-12-31).
-    2 The amount is only numbers (e.g., 5312.14) and does not include currency symbols.
-    3 If any field is missing, return an empty string instead of skipping it.";
-
-
+    1. The date format is strictly YYYY-MM-DD.
+    2. The amount should contain only numbers (no currency symbols).
+    3. If a field is missing, return an empty string instead of skipping it.";
+    
     $postData = [
         "model" => "gemini-1.5-pro",
         "contents" => [
@@ -88,7 +85,7 @@ function extract_cheque_details($imagePath) {
     }
 
     // 🔥 Fix Amount Formatting
-    $parsedData['amountInNumbers'] = preg_replace('/[^0-9.]/', '', $parsedData['amountInNumbers'] ?? '');
+    $parsedData['amount'] = preg_replace('/[^0-9.]/', '', $parsedData['amount'] ?? '');
 
     // 🔥 Convert Date to YYYY-MM-DD
     if (!empty($parsedData['date']) && preg_match('/(\d{2})[-\/](\d{2})[-\/](\d{4})/', $parsedData['date'], $matches)) {
@@ -103,32 +100,27 @@ function extract_cheque_details($imagePath) {
     return is_array($parsedData) ? $parsedData : [];
 }
 
-
-
 // Handle file upload
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_FILES["file"])) {
     $filePath = save_uploaded_file($_FILES["file"]);
     
-    $extractedData = extract_cheque_details($filePath);
-
+    $extractedData = extract_bank_check_details($filePath);
 
     if (!empty($extractedData)) {
-        $stmt = $pdo->prepare("INSERT INTO cheques (date, cheque_number, bank_name, amount, brstn_code, image_path) 
-                               VALUES (:date, :cheque_number, :bank_name, :amount, :brstn_code, :image_path)");
+        $stmt = $pdo->prepare("INSERT INTO bankcheck (bank_name, date, particulars, amount, reference_number, image_path) 
+                               VALUES (:bank_name, :date, :particulars, :amount, :reference_number, :image_path)");
 
         $stmt->execute([
-            ':date' => ($extractedData['date']) ?? null, // ✅ Prevent NULL error
-            ':cheque_number' => $extractedData['chequeNumber'] ?? null,
-            ':bank_name' => $extractedData['bankName'] ?? null,
-            ':amount' => $extractedData['amountInNumbers'] ?? null,
-            ':brstn_code' => $extractedData['brstn'] ?? null,
+            ':bank_name' => $extractedData['bank_name'] ?? null,
+            ':date' => $extractedData['date'] ?? null,
+            ':particulars' => $extractedData['particulars'] ?? null,
+            ':amount' => $extractedData['amount'] ?? null,
+            ':reference_number' => $extractedData['reference_number'] ?? null,
             ':image_path' => $filePath
         ]);
 
-        // ✅ Redirect back to index.php after successful upload
-        header("Location: cheque_extractor.php?success=1");
+        header("Location: bank_check_extractor.php?success=1");
         exit();
-
     }
 }
 ?>

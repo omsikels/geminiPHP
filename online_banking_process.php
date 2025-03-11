@@ -9,7 +9,7 @@ $dotenv->load();
 
 $apiKey = $_ENV['GEMINI_API_KEY'] ?? null;
 if (!$apiKey) {
-    die("❌ ERROR: Missing API Key. Check your `.env` file.");
+    die("\u274c ERROR: Missing API Key. Check your `.env` file.");
 }
 
 define('UPLOADS_DIR', 'uploads'); // ✅ Store images in "uploads" folder
@@ -23,28 +23,25 @@ function save_uploaded_file($file) {
     return $filePath;
 }
 
-function extract_cheque_details($imagePath) {
+function extract_online_banking_details($imagePath) {
     global $apiKey;
 
     $imageData = base64_encode(file_get_contents($imagePath));
-    $prompt = "Extract cheque details from this cheque image with high accuracy. 
+    $prompt = "Extract online banking transaction details with high accuracy. 
     Return the response as a structured JSON object with the following exact fields:
 
     {
-        'accountName': 'Full name of the account holder',
-        'date': 'Cheque issuance date in YYYY-MM-DD format',
-        'chequeNumber': 'Unique cheque number',
-        'accountNumber': 'Complete bank account number',
         'bankName': 'Full name of the bank',
-        'amountInNumbers': 'Exact numeric value of the cheque amount (e.g., 5312.14)',
-        'brstn': 'Bank Routing Symbol Transit Number (BRSTN)'
+        'date': 'Transaction date in YYYY-MM-DD format',
+        'particulars': 'Transaction details (can be empty)',
+        'amount': 'Exact numeric value of the transaction amount (e.g., 5312.14)',
+        'referenceNumber': 'Unique reference number of the transaction'
     }
 
     Ensure:
     1 The date format is strictly YYYY-MM-DD (e.g., 2025-12-31).
     2 The amount is only numbers (e.g., 5312.14) and does not include currency symbols.
     3 If any field is missing, return an empty string instead of skipping it.";
-
 
     $postData = [
         "model" => "gemini-1.5-pro",
@@ -69,7 +66,7 @@ function extract_cheque_details($imagePath) {
     $response = curl_exec($ch);
 
     if (curl_errno($ch)) {
-        die("❌ cURL Error: " . curl_error($ch));
+        die("\u274c cURL Error: " . curl_error($ch));
     }
 
     curl_close($ch);
@@ -84,11 +81,11 @@ function extract_cheque_details($imagePath) {
     $parsedData = json_decode($cleanJson, true);
 
     if (json_last_error() !== JSON_ERROR_NONE) {
-        die("❌ ERROR: Invalid JSON format. Raw Response:\n<pre>$cleanJson</pre>");
+        die("\u274c ERROR: Invalid JSON format. Raw Response:\n<pre>$cleanJson</pre>");
     }
 
     // 🔥 Fix Amount Formatting
-    $parsedData['amountInNumbers'] = preg_replace('/[^0-9.]/', '', $parsedData['amountInNumbers'] ?? '');
+    $parsedData['amount'] = preg_replace('/[^0-9.]/', '', $parsedData['amount'] ?? '');
 
     // 🔥 Convert Date to YYYY-MM-DD
     if (!empty($parsedData['date']) && preg_match('/(\d{2})[-\/](\d{2})[-\/](\d{4})/', $parsedData['date'], $matches)) {
@@ -103,32 +100,28 @@ function extract_cheque_details($imagePath) {
     return is_array($parsedData) ? $parsedData : [];
 }
 
-
-
 // Handle file upload
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_FILES["file"])) {
     $filePath = save_uploaded_file($_FILES["file"]);
     
-    $extractedData = extract_cheque_details($filePath);
-
+    $extractedData = extract_online_banking_details($filePath);
 
     if (!empty($extractedData)) {
-        $stmt = $pdo->prepare("INSERT INTO cheques (date, cheque_number, bank_name, amount, brstn_code, image_path) 
-                               VALUES (:date, :cheque_number, :bank_name, :amount, :brstn_code, :image_path)");
+        $stmt = $pdo->prepare("INSERT INTO onlinebanking (bank_name, date, particulars, amount, reference_number, image_path) 
+                       VALUES (:bank_name, :date, :particulars, :amount, :reference_number, :image_path)");
 
         $stmt->execute([
-            ':date' => ($extractedData['date']) ?? null, // ✅ Prevent NULL error
-            ':cheque_number' => $extractedData['chequeNumber'] ?? null,
+            ':date' => $extractedData['date'] ?? null,
             ':bank_name' => $extractedData['bankName'] ?? null,
-            ':amount' => $extractedData['amountInNumbers'] ?? null,
-            ':brstn_code' => $extractedData['brstn'] ?? null,
+            ':particulars' => $extractedData['particulars'] ?? null,
+            ':amount' => $extractedData['amount'] ?? null,
+            ':reference_number' => $extractedData['referenceNumber'] ?? null,
             ':image_path' => $filePath
         ]);
 
-        // ✅ Redirect back to index.php after successful upload
-        header("Location: cheque_extractor.php?success=1");
+        // ✅ Redirect back to online_banking_extractor.php after successful upload
+        header("Location: online_banking_extractor.php?success=1");
         exit();
-
     }
 }
 ?>
