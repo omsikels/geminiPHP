@@ -21,6 +21,7 @@
             <a href="bank_check_extractor.php" class="option-card">Bank Check Deposit Slip</a>
             <a href="mobile_banking_extractor.php" class="option-card">Mobile Banking</a>
             <a href="online_banking_extractor.php" class="option-card">Online Banking</a>
+            <a href="or_extractor.php" class="option-card">OR Receipt</a>
         </div>
     </div>
 </body>

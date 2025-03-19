@@ -31,11 +31,11 @@ function extract_bank_check_details($imagePath) {
     Return as a structured JSON object with the following exact fields:
 
     {
-        'bank_name': 'Full name of the bank',
-        'date': 'Transaction date in YYYY-MM-DD format',
-        'particulars': 'Transaction description (if available)',
-        'amount': 'Exact numeric value of the transaction amount (e.g., 5312.14)',
-        'reference_number': 'Unique check reference number'
+        \"bank_name\": \"Full name of the bank\",
+        \"date\": \"Transaction date in YYYY-MM-DD format\",
+        \"particulars\": \"Transaction description (if available)\",
+        \"amount\": \"Exact numeric value of the transaction amount (e.g., 5312.14)\",
+        \"reference_number\": \"Unique check reference number (typically beside the word 'DEPOSIT')\"
     }
 
     Ensure:
@@ -72,8 +72,16 @@ function extract_bank_check_details($imagePath) {
     curl_close($ch);
     $json = json_decode($response, true);
 
-    $rawText = $json["candidates"][0]["content"]["parts"][0]["text"] ?? "{}";
+    if (!isset($json["candidates"][0]["content"]["parts"][0]["text"])) {
+        die("❌ ERROR: Unexpected API response format: " . json_encode($json, JSON_PRETTY_PRINT));
+    }
+
+    $rawText = $json["candidates"][0]["content"]["parts"][0]["text"] ?? "";
     $cleanJson = trim(str_replace(["```json", "```"], "", $rawText));
+
+    if (empty($cleanJson)) {
+        die("❌ ERROR: Empty response from API. Please check the request payload or API response.");
+    }
 
     // ✅ Fix JSON format (Convert single quotes to double quotes)
     $cleanJson = preg_replace("/'([^']+)'/", '"$1"', $cleanJson);
@@ -81,20 +89,20 @@ function extract_bank_check_details($imagePath) {
     $parsedData = json_decode($cleanJson, true);
 
     if (json_last_error() !== JSON_ERROR_NONE) {
-        die("❌ ERROR: Invalid JSON format. Raw Response:\n<pre>$cleanJson</pre>");
+        die("❌ ERROR: Invalid JSON format. Raw Response:\n<pre>" . htmlspecialchars($cleanJson) . "</pre>");
     }
 
     // 🔥 Fix Amount Formatting
     $parsedData['amount'] = preg_replace('/[^0-9.]/', '', $parsedData['amount'] ?? '');
 
     // 🔥 Convert Date to YYYY-MM-DD
-    if (!empty($parsedData['date']) && preg_match('/(\d{2})[-\/](\d{2})[-\/](\d{4})/', $parsedData['date'], $matches)) {
-        $day = $matches[1];
-        $month = $matches[2];
-        $year = $matches[3];
+    if (!empty($parsedData['date']) && preg_match('/(\d{2})[-\/] (\d{2})[-\/] (\d{4})/', $parsedData['date'], $matches)) {
+        $parsedData['date'] = "$matches[3]-$matches[2]-$matches[1]";
+    }
 
-        // ✅ Ensure date is formatted correctly
-        $parsedData['date'] = "$year-$month-$day";
+    // 🔥 Extract Reference Number (if next to "DEPOSIT")
+    if (isset($parsedData['reference_number']) && preg_match('/DEPOSIT\s+(\S+)/', $parsedData['reference_number'], $matches)) {
+        $parsedData['reference_number'] = $matches[1];
     }
 
     return is_array($parsedData) ? $parsedData : [];
